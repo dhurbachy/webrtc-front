@@ -109,7 +109,7 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
 
   useEffect(() => {
     // 1. Initialize Socket
-    socket.current = io("http://192.168.18.12:3000");
+    socket.current = io("http://localhost:3000");
     socket.current.emit("register", myId);
 
     // 2. Setup Listeners
