@@ -1,5 +1,5 @@
 
-```markdown
+
 # WebRTC Audio Call Application 📞
 
 A real-time, peer-to-peer audio calling application built with **React**, **TypeScript**, and **Socket.io**. This project demonstrates the implementation of the WebRTC signaling process (Offer/Answer/ICE) to establish direct media streams between users.
@@ -12,7 +12,6 @@ A real-time, peer-to-peer audio calling application built with **React**, **Type
 - **State Feedback**: Visual indicators for "Idle," "Calling," and "Connected" states.
 - **Graceful Termination**: Properly stops media tracks and closes peer connections on hang-up.
 
----
 
 ## 🛠️ Tech Stack
 
@@ -22,7 +21,6 @@ A real-time, peer-to-peer audio calling application built with **React**, **Type
 * **Signaling Server**: Socket.io (Node.js/Express expected)
 * **Build Tool**: Vite
 
----
 
 ## 🏗️ Architecture & Flow
 
@@ -34,7 +32,6 @@ The application follows the standard WebRTC signaling handshake:
 4.  **ICE Candidates**: Both peers exchange network candidates to find the best path for data.
 5.  **Stream**: Once connected, the `ontrack` event attaches the remote audio stream to the `<audio>` element.
 
----
 
 ## 🚦 Getting Started
 
@@ -67,7 +64,6 @@ npm run dev
 4.  Click **Call user2** from Tab 1.
 5.  Accept permissions for the microphone in both tabs.
 
----
 
 ## 📝 Configuration Note
 
@@ -77,9 +73,6 @@ Currently, the application uses a public Google STUN server:
 ```
 For production environments or restrictive networks (symmetric NAT), you may need to implement a **TURN server** (like Coturn).
 
----
-
 ## ⚠️ Known Limitations
 - **Localhost Only**: If testing across different devices, ensure you use `https` or configure browser flags, as `getUserMedia` requires a secure context.
 - **Single Room**: This setup is designed for 1-to-1 calls based on specific User IDs.
-```
