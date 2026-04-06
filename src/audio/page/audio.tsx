@@ -5,6 +5,9 @@ import type { SignalingMessage } from "../types/audio";
 interface Props {
   myId: string;
   remoteId: string;
+  // ✅ FIX: two new props so App can control shutdown from outside
+  registerEndCall?: (fn: (isInitiator?: boolean) => void) => void;
+  onCallEnded?: () => void;
 }
 
 const styles = `
@@ -12,7 +15,6 @@ const styles = `
 
   .call-ui * { box-sizing: border-box; font-family: 'Google Sans', sans-serif; }
 
-  /* ── Stage ── */
   .call-stage {
     position: relative;
     width: 100%;
@@ -25,32 +27,20 @@ const styles = `
     min-height: 480px;
   }
 
-  /* Remote video (big) */
   .remote-video {
-    width: 100%;
-    height: 100%;
-    min-height: 480px;
-    object-fit: cover;
-    display: block;
-    background: #1a1b1e;
-    border-radius: 16px;
+    width: 100%; height: 100%; min-height: 480px;
+    object-fit: cover; display: block;
+    background: #1a1b1e; border-radius: 16px;
   }
 
-  /* Avatar placeholder when video is off */
   .remote-avatar {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    background: #1a1b1e;
-    z-index: 1;
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px; background: #1a1b1e; z-index: 1;
   }
   .avatar-circle {
-    width: 96px; height: 96px;
-    border-radius: 50%;
+    width: 96px; height: 96px; border-radius: 50%;
     background: linear-gradient(135deg, #4285f4, #34a853);
     display: flex; align-items: center; justify-content: center;
     font-size: 36px; font-weight: 600; color: #fff;
@@ -58,181 +48,88 @@ const styles = `
   }
   .avatar-name { font-size: 18px; color: #9aa0a6; font-weight: 500; }
 
-  /* Pre-call overlay */
   .precall-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-    background: rgba(26,27,30,0.92);
-    backdrop-filter: blur(6px);
-    z-index: 10;
-    border-radius: 16px;
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; background: rgba(26,27,30,0.92);
+    backdrop-filter: blur(6px); z-index: 10; border-radius: 16px;
   }
   .precall-text { font-size: 20px; color: #e8eaed; font-weight: 500; }
   .precall-sub  { font-size: 14px; color: #9aa0a6; margin-top: -12px; }
   .btn-start-call {
     display: flex; align-items: center; gap: 10px;
-    padding: 14px 32px;
-    background: #34a853;
-    color: #fff;
+    padding: 14px 32px; background: #34a853; color: #fff;
     border: none; border-radius: 50px;
     font-size: 16px; font-family: 'Google Sans', sans-serif;
     font-weight: 600; cursor: pointer;
     box-shadow: 0 6px 24px rgba(52,168,83,0.4);
     transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
   }
-  .btn-start-call:hover {
-    background: #46c464;
-    box-shadow: 0 8px 28px rgba(52,168,83,0.55);
-  }
+  .btn-start-call:hover { background: #46c464; box-shadow: 0 8px 28px rgba(52,168,83,0.55); }
   .btn-start-call:active { transform: scale(0.97); }
 
-  /* Self-view (PiP) */
   .self-view {
-    position: absolute;
-    bottom: 80px; right: 16px;
-    width: 180px;
-    aspect-ratio: 16/9;
-    border-radius: 12px;
-    overflow: hidden;
+    position: absolute; bottom: 80px; right: 16px;
+    width: 180px; aspect-ratio: 16/9;
+    border-radius: 12px; overflow: hidden;
     border: 2px solid rgba(255,255,255,0.15);
-    background: #2d2e31;
-    z-index: 5;
+    background: #2d2e31; z-index: 5;
     box-shadow: 0 8px 24px rgba(0,0,0,0.6);
     transition: width 0.2s;
   }
   .self-view:hover { width: 220px; }
-  .self-video {
-    width: 100%; height: 100%;
-    object-fit: cover;
-    transform: scaleX(-1); /* Mirror */
-  }
-  .self-avatar {
-    width: 100%; height: 100%;
-    display: flex; align-items: center; justify-content: center;
-    background: #2d2e31;
-    font-size: 28px; font-weight: 700; color: #8ab4f8;
-  }
-  .self-label {
-    position: absolute;
-    bottom: 6px; left: 8px;
-    background: rgba(0,0,0,0.7);
-    color: #e8eaed;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 4px;
-  }
+  .self-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .self-avatar { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #2d2e31; font-size: 28px; font-weight: 700; color: #8ab4f8; }
+  .self-label { position: absolute; bottom: 6px; left: 8px; background: rgba(0,0,0,0.7); color: #e8eaed; font-size: 11px; padding: 2px 8px; border-radius: 4px; }
 
-  /* Status badge */
   .status-badge {
-    position: absolute;
-    top: 14px; left: 50%;
-    transform: translateX(-50%);
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 8px;
-    background: rgba(32,33,36,0.88);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 24px;
-    padding: 6px 16px;
-    font-size: 13px; color: #e8eaed;
-    z-index: 6;
+    background: rgba(32,33,36,0.88); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 24px;
+    padding: 6px 16px; font-size: 13px; color: #e8eaed; z-index: 6;
   }
-  .status-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: #34a853;
-    animation: pulse 1.8s ease-in-out infinite;
-  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #34a853; animation: pulse 1.8s ease-in-out infinite; }
   .status-dot.idle { background: #9aa0a6; animation: none; }
-  @keyframes pulse {
-    0%,100% { opacity:1; transform:scale(1); }
-    50%      { opacity:.4; transform:scale(.75); }
-  }
+  @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.4; transform:scale(.75); } }
 
-  /* ── Control bar ── */
   .control-bar {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: 72px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
+    position: absolute; bottom: 0; left: 0; right: 0; height: 72px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
     background: linear-gradient(transparent, rgba(0,0,0,0.72));
-    border-radius: 0 0 16px 16px;
-    padding: 0 20px;
-    z-index: 8;
-    opacity: 0;
-    transition: opacity 0.22s;
+    border-radius: 0 0 16px 16px; padding: 0 20px; z-index: 8;
+    opacity: 0; transition: opacity 0.22s;
   }
-  .call-stage:hover .control-bar,
-  .control-bar.always-show { opacity: 1; }
+  .call-stage:hover .control-bar, .control-bar.always-show { opacity: 1; }
 
   .ctrl {
-    width: 48px; height: 48px;
-    border-radius: 50%;
-    border: none; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 20px;
-    transition: background 0.15s, transform 0.1s;
-    position: relative;
+    width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    transition: background 0.15s, transform 0.1s; position: relative;
   }
   .ctrl:active { transform: scale(0.92); }
-
-  .ctrl-default {
-    background: rgba(255,255,255,0.12);
-    color: #e8eaed;
-  }
+  .ctrl-default { background: rgba(255,255,255,0.12); color: #e8eaed; }
   .ctrl-default:hover { background: rgba(255,255,255,0.22); }
-
-  .ctrl-off {
-    background: rgba(234,67,53,0.18);
-    color: #f28b82;
-    border: 1.5px solid rgba(234,67,53,0.35);
-  }
+  .ctrl-off { background: rgba(234,67,53,0.18); color: #f28b82; border: 1.5px solid rgba(234,67,53,0.35); }
   .ctrl-off:hover { background: rgba(234,67,53,0.3); }
-
-  .ctrl-end {
-    background: #ea4335;
-    color: #fff;
-    width: 56px; height: 56px;
-    font-size: 22px;
-    box-shadow: 0 4px 20px rgba(234,67,53,0.5);
-  }
+  .ctrl-end { background: #ea4335; color: #fff; width: 56px; height: 56px; font-size: 22px; box-shadow: 0 4px 20px rgba(234,67,53,0.5); }
   .ctrl-end:hover { background: #d93025; box-shadow: 0 6px 24px rgba(234,67,53,0.7); }
 
   .ctrl-tooltip {
-    position: absolute;
-    bottom: 110%;
-    left: 50%; transform: translateX(-50%);
-    background: rgba(32,33,36,0.95);
-    color: #e8eaed;
-    font-size: 11px; white-space: nowrap;
-    padding: 4px 10px; border-radius: 6px;
-    pointer-events: none; opacity: 0;
-    transition: opacity 0.15s;
+    position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
+    background: rgba(32,33,36,0.95); color: #e8eaed; font-size: 11px; white-space: nowrap;
+    padding: 4px 10px; border-radius: 6px; pointer-events: none;
+    opacity: 0; transition: opacity 0.15s;
   }
   .ctrl:hover .ctrl-tooltip { opacity: 1; }
 
-  /* Ringing animation */
   @keyframes ring {
-    0%,100% { transform: rotate(0deg); }
-    20%      { transform: rotate(-15deg); }
-    40%      { transform: rotate(15deg); }
-    60%      { transform: rotate(-10deg); }
-    80%      { transform: rotate(10deg); }
+    0%,100% { transform: rotate(0deg); } 20% { transform: rotate(-15deg); }
+    40% { transform: rotate(15deg); } 60% { transform: rotate(-10deg); } 80% { transform: rotate(10deg); }
   }
   .ringing { animation: ring 0.7s ease-in-out infinite; display: inline-block; }
-
-  /* Connecting dots */
-  .dots span {
-    display: inline-block;
-    animation: blink 1.4s infinite both;
-    font-size: 20px;
-  }
+  .dots span { display: inline-block; animation: blink 1.4s infinite both; font-size: 20px; }
   .dots span:nth-child(2) { animation-delay: .2s; }
   .dots span:nth-child(3) { animation-delay: .4s; }
   @keyframes blink { 0%,80%,100% { opacity:0; } 40% { opacity:1; } }
@@ -240,44 +137,71 @@ const styles = `
 
 type CallPhase = "idle" | "calling" | "connected";
 
-const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
-  const [phase, setPhase]           = useState<CallPhase>("idle");
-  const [micOn,  setMicOn]          = useState(true);
-  const [camOn,  setCamOn]          = useState(true);
+const AudioCall: React.FC<Props> = ({ myId, remoteId, registerEndCall, onCallEnded }) => {
+  const [phase, setPhase]             = useState<CallPhase>("idle");
+  const [micOn, setMicOn]             = useState(true);
+  const [camOn, setCamOn]             = useState(true);
   const [remoteVideo, setRemoteVideo] = useState(false);
 
-  const socket          = useRef<Socket | null>(null);
-  const peerConnection  = useRef<RTCPeerConnection | null>(null);
-  const localStream     = useRef<MediaStream | null>(null);
-  const remoteAudioRef  = useRef<HTMLAudioElement | null>(null);
-  const localVideoRef   = useRef<HTMLVideoElement | null>(null);
-  const remoteVideoRef  = useRef<HTMLVideoElement | null>(null);
+  const socket         = useRef<Socket | null>(null);
+  const peerConnection = useRef<RTCPeerConnection | null>(null);
+  const localStream    = useRef<MediaStream | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const localVideoRef  = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const rtcConfig: RTCConfiguration = {
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
   };
 
-  // ── helpers ──────────────────────────────────────────────
+  // ✅ FIX: endCall stops ALL tracks immediately before anything else
+  const endCall = useCallback((isInitiator = true) => {
+    // 1. Stop every track — this is what kills the camera/mic browser indicator
+    localStream.current?.getTracks().forEach((t) => t.stop());
+    localStream.current = null;
+
+    // 2. Close the peer connection
+    peerConnection.current?.close();
+    peerConnection.current = null;
+
+    // 3. Clear all media elements
+    if (remoteAudioRef.current)  remoteAudioRef.current.srcObject  = null;
+    if (localVideoRef.current)   localVideoRef.current.srcObject   = null;
+    if (remoteVideoRef.current)  remoteVideoRef.current.srcObject  = null;
+
+    // 4. Reset UI state
+    setPhase("idle");
+    setRemoteVideo(false);
+    setMicOn(true);
+    setCamOn(true);
+
+    // 5. Notify remote only if we hung up (not if they did)
+    if (isInitiator) socket.current?.emit("end-call", { to: remoteId });
+
+    // 6. If remote ended the call, tell App to go back to lobby
+    if (!isInitiator) onCallEnded?.();
+  }, [remoteId, onCallEnded]);
+
+  // ✅ FIX: expose endCall to App via registerEndCall prop
+  useEffect(() => {
+    registerEndCall?.(endCall);
+  }, [registerEndCall, endCall]);
 
   const initPeer = useCallback(async () => {
     peerConnection.current = new RTCPeerConnection(rtcConfig);
 
     peerConnection.current.onconnectionstatechange = () => {
       const state = peerConnection.current?.connectionState;
-      if (state === "connected")                         setPhase("connected");
+      if (state === "connected")                          setPhase("connected");
       if (state === "failed" || state === "disconnected") setPhase("idle");
     };
 
-    // Audio + Video
     localStream.current = await navigator.mediaDevices.getUserMedia({
       audio: true,
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
     });
 
-    // Show self-view
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = localStream.current;
-    }
+    if (localVideoRef.current) localVideoRef.current.srcObject = localStream.current;
 
     localStream.current.getTracks().forEach((track) => {
       peerConnection.current?.addTrack(track, localStream.current!);
@@ -286,40 +210,16 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
     peerConnection.current.ontrack = (event) => {
       const stream = event.streams[0];
       if (!stream) return;
-
-      // Audio
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = stream;
-      }
-      // Video
+      if (remoteAudioRef.current) remoteAudioRef.current.srcObject = stream;
       const hasVideo = stream.getVideoTracks().length > 0;
       setRemoteVideo(hasVideo);
-      if (remoteVideoRef.current && hasVideo) {
-        remoteVideoRef.current.srcObject = stream;
-      }
+      if (remoteVideoRef.current && hasVideo) remoteVideoRef.current.srcObject = stream;
     };
 
     peerConnection.current.onicecandidate = (e) => {
-      if (e.candidate) {
-        socket.current?.emit("ice-candidate", { to: remoteId, candidate: e.candidate });
-      }
+      if (e.candidate) socket.current?.emit("ice-candidate", { to: remoteId, candidate: e.candidate });
     };
   }, [remoteId]);
-
-  const endCall = useCallback((isInitiator = true) => {
-    localStream.current?.getTracks().forEach((t) => t.stop());
-    localStream.current = null;
-    peerConnection.current?.close();
-    peerConnection.current = null;
-    if (remoteAudioRef.current)  remoteAudioRef.current.srcObject = null;
-    if (localVideoRef.current)   localVideoRef.current.srcObject  = null;
-    if (remoteVideoRef.current)  remoteVideoRef.current.srcObject = null;
-    setPhase("idle");
-    setRemoteVideo(false);
-    if (isInitiator) socket.current?.emit("end-call", { to: remoteId });
-  }, [remoteId]);
-
-  // ── signaling ─────────────────────────────────────────────
 
   async function handleIncomingOffer({ offer, from }: SignalingMessage) {
     await initPeer();
@@ -332,15 +232,12 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
   }
 
   async function handleIncomingAnswer({ answer }: SignalingMessage) {
-    if (answer) {
-      await peerConnection.current?.setRemoteDescription(new RTCSessionDescription(answer));
-    }
+    if (answer) await peerConnection.current?.setRemoteDescription(new RTCSessionDescription(answer));
   }
 
   useEffect(() => {
     socket.current = io("http://localhost:3000");
     socket.current.emit("register", myId);
-
     socket.current.on("offer",         handleIncomingOffer);
     socket.current.on("answer",        handleIncomingAnswer);
     socket.current.on("end-call",      () => endCall(false));
@@ -348,14 +245,16 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
       peerConnection.current?.addIceCandidate(new RTCIceCandidate(candidate));
     });
 
+    // ✅ FIX: unmount cleanup also hard-stops all tracks
     return () => {
       socket.current?.disconnect();
-      endCall(false);
+      localStream.current?.getTracks().forEach((t) => t.stop());
+      localStream.current = null;
+      peerConnection.current?.close();
+      peerConnection.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myId, remoteId]);
-
-  // ── actions ───────────────────────────────────────────────
 
   const startCall = async () => {
     setPhase("calling");
@@ -377,25 +276,16 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
     setCamOn(enabled);
   };
 
-  // ── initials ──────────────────────────────────────────────
   const myInitials     = myId.slice(0, 2).toUpperCase();
   const remoteInitials = remoteId.slice(0, 2).toUpperCase();
 
-  // ── render ────────────────────────────────────────────────
   return (
     <div className="call-ui">
       <style>{styles}</style>
-
       <div className="call-stage">
 
-        {/* ── Remote video / avatar ── */}
         {remoteVideo ? (
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            className="remote-video"
-          />
+          <video ref={remoteVideoRef} autoPlay playsInline className="remote-video" />
         ) : (
           <div className="remote-avatar">
             <div className="avatar-circle">{remoteInitials}</div>
@@ -403,7 +293,6 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
           </div>
         )}
 
-        {/* ── Status badge ── */}
         {phase !== "idle" && (
           <div className="status-badge">
             <span className={`status-dot ${phase === "connected" ? "" : "idle"}`} />
@@ -412,24 +301,19 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
           </div>
         )}
 
-        {/* ── Self PiP ── */}
         {phase !== "idle" && (
           <div className="self-view">
-            {camOn ? (
-              <video ref={localVideoRef} autoPlay playsInline muted className="self-video" />
-            ) : (
-              <div className="self-avatar">{myInitials}</div>
-            )}
+            {camOn
+              ? <video ref={localVideoRef} autoPlay playsInline muted className="self-video" />
+              : <div className="self-avatar">{myInitials}</div>
+            }
             <span className="self-label">{myId} (You)</span>
           </div>
         )}
 
-        {/* ── Pre-call overlay ── */}
         {phase === "idle" && (
           <div className="precall-overlay">
-            <div className="avatar-circle" style={{ width: 80, height: 80, fontSize: 28 }}>
-              {remoteInitials}
-            </div>
+            <div className="avatar-circle" style={{ width: 80, height: 80, fontSize: 28 }}>{remoteInitials}</div>
             <p className="precall-text">Ready to call {remoteId}?</p>
             <p className="precall-sub">Your camera and mic will turn on when you join</p>
             <button className="btn-start-call" onClick={startCall}>
@@ -441,10 +325,7 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
           </div>
         )}
 
-        {/* ── Control bar ── */}
         <div className={`control-bar ${phase !== "idle" ? "always-show" : ""}`}>
-
-          {/* Mic */}
           <button className={`ctrl ${micOn ? "ctrl-default" : "ctrl-off"}`} onClick={toggleMic}>
             <span className="ctrl-tooltip">{micOn ? "Mute mic" : "Unmute mic"}</span>
             {micOn ? (
@@ -458,7 +339,6 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
             )}
           </button>
 
-          {/* Camera */}
           <button className={`ctrl ${camOn ? "ctrl-default" : "ctrl-off"}`} onClick={toggleCam}>
             <span className="ctrl-tooltip">{camOn ? "Turn off camera" : "Turn on camera"}</span>
             {camOn ? (
@@ -472,7 +352,6 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
             )}
           </button>
 
-          {/* End call */}
           {phase !== "idle" && (
             <button className="ctrl ctrl-end" onClick={() => endCall(true)}>
               <span className="ctrl-tooltip">Leave call</span>
@@ -483,7 +362,6 @@ const AudioCall: React.FC<Props> = ({ myId, remoteId }) => {
           )}
         </div>
 
-        {/* Hidden audio element */}
         <audio ref={remoteAudioRef} autoPlay />
       </div>
     </div>
